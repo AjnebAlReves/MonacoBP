@@ -364,6 +364,8 @@ const Editor = () => {
                 event.preventDefault();
                 if (action === 'edit') {
                     save();
+                } else if (action === 'new') {
+                    setModalVisible(true);
                 }
             }
         };
