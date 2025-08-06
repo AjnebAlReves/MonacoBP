@@ -2,7 +2,7 @@ info:
   name: "PteroMonaco"
   identifier: "pteromonaco"
   description: "Replaces the regular pterodactyl file editor with Monaco"
-  version: "1.1"
+  version: "1.2"
   target: "beta-2024-12"
   author: "Zephrynis"
   icon: "icon.png"
