@@ -360,7 +360,7 @@ const Editor = () => {
     // Add keyboard shortcut for Ctrl+S (Windows/Linux) and Cmd+S (macOS)
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
                 event.preventDefault();
                 if (action === 'edit') {
                     save();
