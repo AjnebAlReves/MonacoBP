@@ -1,4 +1,4 @@
-.igexuH, .eDlcZT {
+.FileEditContainer___StyledDiv3-sc-48rzpu-7, .FileEditContainer___StyledDiv4-sc-48rzpu-8 {
     display: none !important;
 }
 
@@ -7,12 +7,12 @@
     min-height: 16rem;
 }
 
-.cDkCmT {
+.Button__ButtonStyle-sc-1qu1gou-0 {
     flex: 1 1 0%;
 }
 
 @media (min-width: 640px) {
-    .cDkCmT {
+    .Button__ButtonStyle-sc-1qu1gou-0 {
         flex: none;
     }
 }
