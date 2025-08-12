@@ -1,12 +1,12 @@
 info:
-  name: "PteroMonaco"
-  identifier: "pteromonaco"
+  name: "MonacoBP"
+  identifier: "monacobp"
   description: "Replaces the regular pterodactyl file editor with Monaco"
   version: "1.2"
   target: "beta-2024-12"
-  author: "Zephrynis"
+  author: "FlyxNodes"
   icon: "icon.png"
-  website: "https://zephrynis.me/"
+  website: "https://flyxnodes.xyz/"
 
 admin:
   view: "view.blade.php"
