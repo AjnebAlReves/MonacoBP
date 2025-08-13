@@ -29,7 +29,7 @@ jobs:
 
       - name: Push binary
         id: push_binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: monacobp.blueprint
           path: monacobp.blueprint
