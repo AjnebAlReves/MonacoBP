@@ -27,23 +27,10 @@ jobs:
         id: blueprint_build
         uses: zephrynis/blueprint-export@v1.0.0
 
-      - name: Create Release
-        id: create_release
-        uses: comnoco/create-release-action@main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+      - name: Push binary
+        id: push_binary
+        uses: actions/upload-artifact@v3
         with:
-          tag_name: ${{ steps.get_version.outputs.VERSION }}
-          release_name: v${{ steps.get_version.outputs.VERSION }}
-          body: "${{ github.event.head_commit.message }}\n\n# Steps to install\n1. Drop pteromonaco.blueprint into your pterodactyl root folder (This is usually /var/www/pterodactyl/)\n2. Run `blueprint -i pteromonaco` in the terminal"
-          draft: false
-          prerelease: false
-          
-      - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ steps.blueprint_build.outputs.FILE }}
-          asset_name: ${{ steps.blueprint_build.outputs.FILE }}
-          tag: ${{ steps.get_version.outputs.VERSION }}
-          overwrite: true
+          name: monacobp.blueprint
+          path: monacobp.blueprint
+          retention-days: 10
