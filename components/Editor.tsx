@@ -41,6 +41,24 @@ const addButtonStyles = () => {
     }
 };
 
+    /**
+     * Determines if the current screen is small (mobile-sized) or not.
+     *
+     * Checks the following conditions:
+     * - If the user agent is a mobile device (Android, iPhone, iPad)
+     * - If the window width is less than 1024px
+     * - If the window ratio is 16:9 or 4:3 (common mobile aspect ratios)
+     *
+     * @return {boolean} True if the screen is small, false otherwise
+     */
+const isSmallScreen = () => {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const ratio = (w / h).toFixed(2);
+    const mobileUA = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    return mobileUA || w < 1024 || ratio === (9/16).toFixed(2) || ratio === (4/3).toFixed(2);
+};
+
 const Editor = () => {
     // Router hooks
     const { hash } = useLocation();
@@ -255,6 +273,12 @@ const Editor = () => {
         const loadMonaco = () => {
             // Check if Monaco is already loaded
             if (window.monaco) {
+                setMonacoLoaded(true);
+                return;
+            }
+
+            if (isSmallScreen()) {
+                // Intentar usar CodeMirror
                 setMonacoLoaded(true);
                 return;
             }
