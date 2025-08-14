@@ -28,12 +28,19 @@ const addButtonStyles = () => {
         const style = document.createElement('style');
         style.id = styleId;
         style.textContent = `
+            .responsive-button-group {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
             .responsive-button {
-                flex: 1 1 0%;
+                flex: 1 1 200px;
+                min-width: 120px;
             }
             @media (min-width: 640px) {
                 .responsive-button {
                     flex: none;
+                    min-width: auto;
                 }
             }
         `;
@@ -41,58 +48,45 @@ const addButtonStyles = () => {
     }
 };
 
-    /**
-     * Determines if the current screen is small (mobile-sized) or not.
-     *
-     * Checks the following conditions:
-     * - If the user agent is a mobile device (Android, iPhone, iPad)
-     * - If the window width is less than 1024px
-     * - If the window ratio is 16:9 or 4:3 (common mobile aspect ratios)
-     *
-     * @return {boolean} True if the screen is small, false otherwise
-     */
-const isSmallScreen = () => {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    const ratio = (w / h).toFixed(2);
-    const mobileUA = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-    return mobileUA || w < 1024 || ratio === (9/16).toFixed(2) || ratio === (4/3).toFixed(2);
-};
-
 const Editor = () => {
     // Router hooks
     const { hash } = useLocation();
     const history = useHistory();
     const { action } = useParams<{ action: 'new' | string }>();
-    
+
     // Component state
     const [content, setContent] = useState('');
     const [modalVisible, setModalVisible] = useState(false);
     const [loading, setLoading] = useState(action === 'edit');
     const [monacoLoaded, setMonacoLoaded] = useState(false);
     const [lang, setLang] = useState('text/plain');
-    
+
     // Refs
     const containerRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<any>(null);
-    
+
     // Context and hooks
     const id = ServerContext.useStoreState((state) => state.server.data!.id);
     const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
     const setDirectory = ServerContext.useStoreActions((actions) => actions.files.setDirectory);
     const { addError, clearFlashes } = useFlash();
-    
+
+    // Initialize responsive button styles
+    useEffect(() => {
+        addButtonStyles();
+    }, []);
+
     // Auto-detect language based on file extension
     const detectLanguageFromPath = (filePath: string): string => {
         const extension = filePath.split('.').pop()?.toLowerCase();
-        
+
         const extensionToMime: { [key: string]: string } = {
             // JavaScript/TypeScript
             'js': 'text/javascript',
             'jsx': 'text/javascript',
             'ts': 'application/typescript',
             'tsx': 'application/typescript',
-            
+
             // Web technologies
             'html': 'text/html',
             'htm': 'text/html',
@@ -100,13 +94,13 @@ const Editor = () => {
             'scss': 'text/x-scss',
             'sass': 'text/x-sass',
             'xml': 'application/xml',
-            
+
             // Data formats
             'json': 'application/json',
             'yaml': 'text/x-yaml',
             'yml': 'text/x-yaml',
             'toml': 'text/x-toml',
-            
+
             // Programming languages
             'py': 'text/x-python',
             'php': 'text/x-php',
@@ -120,7 +114,7 @@ const Editor = () => {
             'rs': 'text/x-rustsrc',
             'rb': 'text/x-ruby',
             'lua': 'text/x-lua',
-            
+
             // Shell/Config
             'sh': 'text/x-sh',
             'bash': 'text/x-sh',
@@ -130,24 +124,24 @@ const Editor = () => {
             'properties': 'text/x-properties',
             'conf': 'text/x-nginx-conf',
             'nginx': 'text/x-nginx-conf',
-            
+
             // Database
             'sql': 'text/x-sql',
-            
+
             // Documentation
             'md': 'text/x-markdown',
             'markdown': 'text/x-markdown',
             'txt': 'text/plain',
-            
+
             // Other
             'diff': 'text/x-diff',
             'patch': 'text/x-diff',
             'vue': 'script/x-vue'
         };
-        
+
         return extensionToMime[extension || ''] || 'text/plain';
     };
-    
+
     // Map MIME types to Monaco language identifiers
     const getMonacoLanguage = (mimeType: string): string => {
         const languageMap: { [key: string]: string } = {
@@ -222,23 +216,23 @@ const Editor = () => {
             setLang(detectedMime);
         }
     }, [action, hash]);
-    
+
     const save = (name?: string) => {
         if (!editorRef.current) {
             return;
         }
-        
+
         setLoading(true);
         clearFlashes('files:view');
-        
+
         const editorContent = editorRef.current.getValue();
         const filePath = name || hashToPath(hash);
-        
+
         saveFileContents(uuid, filePath, editorContent)
             .then(() => {
                 // Update the content state to match what was saved
                 setContent(editorContent);
-                
+
                 if (name) {
                     // For new files, navigate to edit mode with the new file
                     history.push(`/server/${id}/files/edit#/${encodePathSegments(name)}`);
@@ -252,14 +246,15 @@ const Editor = () => {
             })
             .then(() => setLoading(false));
     };
+
     // Load file contents for existing files
     useEffect(() => {
         if (action === 'new') return;
-        
+
         setLoading(true);
         const path = hashToPath(hash);
         setDirectory(dirname(path));
-        
+
         getFileContents(uuid, path)
             .then(setContent)
             .catch((error) => {
@@ -268,6 +263,7 @@ const Editor = () => {
             })
             .then(() => setLoading(false));
     }, [action, uuid, hash]);
+
     // Load Monaco Editor from CDN
     useEffect(() => {
         const loadMonaco = () => {
@@ -277,26 +273,13 @@ const Editor = () => {
                 return;
             }
 
-            if (isSmallScreen()) {
-                // Intentar usar CodeMirror
-                setMonacoLoaded(true);
-                return;
-            }
-            
-            // Load the Monaco Editor CSS
-            const cssLink = document.createElement('link');
-            cssLink.rel = 'stylesheet';
-            cssLink.href = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css';
-            document.head.appendChild(cssLink);
-            
-            // Load the Monaco Editor JavaScript
             const script = document.createElement('script');
             script.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js';
             script.onload = () => {
-                window.require.config({
-                    paths: {
-                        vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'
-                    }
+                window.require.config({ 
+                    paths: { 
+                        vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' 
+                    } 
                 });
                 window.require(['vs/editor/editor.main'], () => {
                     setMonacoLoaded(true);
@@ -304,9 +287,9 @@ const Editor = () => {
             };
             document.head.appendChild(script);
         };
-        
+
         loadMonaco();
-        
+
         // Cleanup function
         return () => {
             if (editorRef.current) {
@@ -314,27 +297,19 @@ const Editor = () => {
             }
         };
     }, []);
+
     // Initialize editor when both Monaco is loaded and we have content (or for new files)
     useEffect(() => {
-        if (!monacoLoaded || !containerRef.current) {
+        if (!monacoLoaded || !containerRef.current || editorRef.current) {
             return;
         }
-        
+
         // For new files, initialize immediately
         // For edit files, wait until content is loaded (loading is false)
-        // But don't recreate editor when loading changes during save operations
-        if ((action === 'new' && !editorRef.current) || (action === 'edit' && !loading && !editorRef.current)) { 
-            // Destroy existing editor if it exists (should not happen with new logic)
-            if (editorRef.current) {
-                editorRef.current.dispose();
-            }
-            
-            // For new files, use empty string if content is empty
+        if (action === 'new' || (action === 'edit' && !loading)) {
             const initialContent = action === 'new' && !content ? '' : content;
-            
-            // Always start with plaintext for new files, language will be set separately
-            const editorLanguage = 'plaintext';
-            
+            const editorLanguage = getMonacoLanguage(lang);
+
             // Create the editor
             editorRef.current = window.monaco.editor.create(containerRef.current, {
                 value: initialContent,
@@ -345,42 +320,24 @@ const Editor = () => {
                     enabled: true
                 },
                 fontSize: 14,
-                wordWrap: 'off',
-                scrollBeyondLastLine: false
+                wordWrap: 'on',
+                scrollBeyondLastLine: false,
+                lineNumbersMinChars: 3
             });
-            
-            // Apply the current language after editor is fully initialized
-            setTimeout(() => {
-                if (editorRef.current && lang !== 'text/plain') {
-                    const monacoLanguage = getMonacoLanguage(lang);
-                    const model = editorRef.current.getModel();
-                    if (model && window.monaco) {
-                        window.monaco.editor.setModelLanguage(model, monacoLanguage);
-                    }
-                }
-            }, 100);
         }
     }, [monacoLoaded, content, loading, action, lang]);
+
     // Update editor language when lang changes
     useEffect(() => {
-        if (editorRef.current && window.monaco) {
+        if (editorRef.current && window.monaco && monacoLoaded) {
             const model = editorRef.current.getModel();
             if (model) {
                 const monacoLanguage = getMonacoLanguage(lang);
-                
-                // Check if the language is supported by Monaco
-                const supportedLanguages = window.monaco.languages.getLanguages();
-                const isSupported = supportedLanguages.some((l: any) => l.id === monacoLanguage);
-                
-                if (isSupported) {
-                    window.monaco.editor.setModelLanguage(model, monacoLanguage);
-                } else {
-                    window.monaco.editor.setModelLanguage(model, 'plaintext');
-                }
+                window.monaco.editor.setModelLanguage(model, monacoLanguage);
             }
         }
-    }, [lang]);
-    
+    }, [lang, monacoLoaded]);
+
     // Add keyboard shortcut for Ctrl+S (Windows/Linux) and Cmd+S (macOS)
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -400,35 +357,43 @@ const Editor = () => {
         };
     }, [action, save]);
 
-    // Update editor content when content state changes (for existing editor)
+    // Update editor content when content state changes
     useEffect(() => {
-        if (editorRef.current && window.monaco && content !== editorRef.current.getValue()) {
+        if (editorRef.current && monacoLoaded && content !== editorRef.current.getValue()) {
             editorRef.current.setValue(content);
         }
-    }, [content]);
-    
+    }, [content, monacoLoaded]);
 
     return (
         <>
-            <FileNameModal 
-                visible={modalVisible} 
-                onDismissed={() => setModalVisible(false)} 
+            <FileNameModal
+                visible={modalVisible}
+                onDismissed={() => setModalVisible(false)}
                 onFileNamed={(name) => {
                     setModalVisible(false);
                     // Auto-detect language based on the new file name
                     const detectedMime = detectLanguageFromPath(name);
                     setLang(detectedMime);
                     save(name);
-                }} 
+                }}
             />
-            
-            <div style={{ position: 'relative' }}>
+
+            <div style={{ position: 'relative', height: '60vh', minHeight: '300px' }}>
                 <SpinnerOverlay visible={loading} />
-                <div ref={containerRef} id="monaco-container" style={{borderRadius: 'var(--borderRadius)', overflow: 'hidden'}} />
+                <div 
+                    ref={containerRef} 
+                    id="monaco-container" 
+                    style={{ 
+                        borderRadius: 'var(--borderRadius)', 
+                        overflow: 'hidden',
+                        height: '100%',
+                        width: '100%'
+                    }} 
+                />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-                <div className='FileEditContainer___StyledDiv5-sc-48rzpu-9 arKOj'>
+            <div className="responsive-button-group" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', gap: '0.5rem' }}>
+                <div className='FileEditContainer___StyledDiv5-sc-48rzpu-9 arKOj responsive-button'>
                     <Select value={lang} onChange={(e) => setLang(e.currentTarget.value)}>
                         {modes.map((mode) => (
                             <option key={`${mode.name}_${mode.mime}`} value={mode.mime}>
@@ -437,16 +402,16 @@ const Editor = () => {
                         ))}
                     </Select>
                 </div>
-                
+
                 {action === 'edit' ? (
                     <Can action={'file.update'}>
-                        <Button onClick={() => save()}>
+                        <Button className="responsive-button" onClick={() => save()}>
                             Save Content
                         </Button>
                     </Can>
                 ) : (
                     <Can action={'file.create'}>
-                        <Button onClick={() => setModalVisible(true)}>
+                        <Button className="responsive-button" onClick={() => setModalVisible(true)}>
                             Create File
                         </Button>
                     </Can>
