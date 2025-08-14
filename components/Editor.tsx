@@ -14,6 +14,7 @@ import Can from '@/components/elements/Can';
 import Select from '@/components/elements/Select';
 import Button from '@/components/elements/Button';
 import modes from '@/modes';
+
 declare global {
     interface Window {
         monaco: any;
@@ -21,7 +22,7 @@ declare global {
     }
 }
 
-// Add CSS to document head for responsive button styling
+// Añadir estilos responsivos para los botones
 const addButtonStyles = () => {
     const styleId = 'responsive-button-styles';
     if (!document.getElementById(styleId)) {
@@ -32,10 +33,12 @@ const addButtonStyles = () => {
                 display: flex;
                 flex-wrap: wrap;
                 gap: 0.5rem;
+                justify-content: flex-end;
             }
             .responsive-button {
-                flex: 1 1 200px;
+                flex: 1 1 180px;
                 min-width: 120px;
+                white-space: nowrap;
             }
             @media (min-width: 640px) {
                 .responsive-button {
@@ -49,178 +52,95 @@ const addButtonStyles = () => {
 };
 
 const Editor = () => {
-    // Router hooks
     const { hash } = useLocation();
     const history = useHistory();
     const { action } = useParams<{ action: 'new' | string }>();
 
-    // Component state
     const [content, setContent] = useState('');
     const [modalVisible, setModalVisible] = useState(false);
     const [loading, setLoading] = useState(action === 'edit');
-    const [monacoLoaded, setMonacoLoaded] = useState(false);
+    const [editorLoaded, setEditorLoaded] = useState(false);
     const [lang, setLang] = useState('text/plain');
+    const [isMobile, setIsMobile] = useState(false);
 
-    // Refs
     const containerRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<any>(null);
 
-    // Context and hooks
     const id = ServerContext.useStoreState((state) => state.server.data!.id);
     const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
     const setDirectory = ServerContext.useStoreActions((actions) => actions.files.setDirectory);
     const { addError, clearFlashes } = useFlash();
 
-    // Initialize responsive button styles
+    // Detectar si es dispositivo móvil
+    useEffect(() => {
+        const checkMobile = () => {
+            const mobileUA = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+            const isSmall = window.innerWidth < 768;
+            setIsMobile(mobileUA || isSmall);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
+    // Cargar estilos responsivos
     useEffect(() => {
         addButtonStyles();
     }, []);
 
-    // Auto-detect language based on file extension
+    // Detección de lenguaje por extensión
     const detectLanguageFromPath = (filePath: string): string => {
-        const extension = filePath.split('.').pop()?.toLowerCase();
-
-        const extensionToMime: { [key: string]: string } = {
-            // JavaScript/TypeScript
-            'js': 'text/javascript',
-            'jsx': 'text/javascript',
-            'ts': 'application/typescript',
-            'tsx': 'application/typescript',
-
-            // Web technologies
-            'html': 'text/html',
-            'htm': 'text/html',
-            'css': 'text/css',
-            'scss': 'text/x-scss',
-            'sass': 'text/x-sass',
-            'xml': 'application/xml',
-
-            // Data formats
-            'json': 'application/json',
-            'yaml': 'text/x-yaml',
-            'yml': 'text/x-yaml',
-            'toml': 'text/x-toml',
-
-            // Programming languages
-            'py': 'text/x-python',
-            'php': 'text/x-php',
-            'java': 'text/x-java',
-            'c': 'text/x-csrc',
-            'cpp': 'text/x-c++src',
-            'cxx': 'text/x-c++src',
-            'cc': 'text/x-c++src',
-            'cs': 'text/x-csharp',
-            'go': 'text/x-go',
-            'rs': 'text/x-rustsrc',
-            'rb': 'text/x-ruby',
-            'lua': 'text/x-lua',
-
-            // Shell/Config
-            'sh': 'text/x-sh',
-            'bash': 'text/x-sh',
-            'zsh': 'text/x-sh',
-            'dockerfile': 'text/x-dockerfile',
-            'env': 'text/x-properties',
-            'properties': 'text/x-properties',
-            'conf': 'text/x-nginx-conf',
-            'nginx': 'text/x-nginx-conf',
-
-            // Database
-            'sql': 'text/x-sql',
-
-            // Documentation
-            'md': 'text/x-markdown',
-            'markdown': 'text/x-markdown',
-            'txt': 'text/plain',
-
-            // Other
-            'diff': 'text/x-diff',
-            'patch': 'text/x-diff',
-            'vue': 'script/x-vue'
+        const ext = filePath.split('.').pop()?.toLowerCase();
+        const map: { [key: string]: string } = {
+            js: 'text/javascript', jsx: 'text/javascript',
+            ts: 'application/typescript', tsx: 'application/typescript',
+            html: 'text/html', htm: 'text/html',
+            css: 'text/css', scss: 'text/x-scss',
+            json: 'application/json', yaml: 'text/x-yaml', yml: 'text/x-yaml',
+            py: 'text/x-python', php: 'text/x-php',
+            java: 'text/x-java', c: 'text/x-csrc', cpp: 'text/x-c++src',
+            md: 'text/x-markdown', txt: 'text/plain',
+            sh: 'text/x-sh', dockerfile: 'text/x-dockerfile',
+            sql: 'text/x-sql', vue: 'script/x-vue'
         };
-
-        return extensionToMime[extension || ''] || 'text/plain';
+        return map[ext || ''] || 'text/plain';
     };
 
-    // Map MIME types to Monaco language identifiers
-    const getMonacoLanguage = (mimeType: string): string => {
-        const languageMap: { [key: string]: string } = {
+    // Mapeo MIME → Monaco/CodeMirror
+    const getLanguageId = (mimeType: string): string => {
+        const map: { [key: string]: string } = {
             'text/plain': 'plaintext',
             'application/json': 'json',
             'text/javascript': 'javascript',
-            'application/javascript': 'javascript',
             'application/typescript': 'typescript',
-            'text/typescript': 'typescript',
             'text/html': 'html',
             'text/css': 'css',
-            'text/xml': 'xml',
-            'application/xml': 'xml',
-            'text/yaml': 'yaml',
-            'application/x-yaml': 'yaml',
             'text/x-yaml': 'yaml',
-            'application/yaml': 'yaml',
             'text/x-python': 'python',
-            'application/x-python': 'python',
-            'text/python': 'python',
-            'application/x-php': 'php',
             'text/x-php': 'php',
-            'text/php': 'php',
             'text/x-java': 'java',
-            'application/java': 'java',
-            'text/x-csharp': 'csharp',
-            'text/csharp': 'csharp',
-            'text/x-sql': 'sql',
-            'application/sql': 'sql',
-            'text/x-sh': 'shell',
-            'application/x-sh': 'shell',
-            'text/x-shellscript': 'shell',
-            'application/x-shellscript': 'shell',
-            'text/x-dockerfile': 'dockerfile',
-            'application/x-dockerfile': 'dockerfile',
-            'text/markdown': 'markdown',
-            'text/x-markdown': 'markdown',
-            'text/x-gfm': 'markdown',
-            'application/x-httpd-php': 'php',
-            'text/x-c': 'c',
             'text/x-csrc': 'c',
-            'text/x-c++': 'cpp',
             'text/x-c++src': 'cpp',
-            'text/x-cpp': 'cpp',
-            'text/x-go': 'go',
-            'text/x-ruby': 'ruby',
-            'text/x-rustsrc': 'rust',
-            'text/x-lua': 'lua',
-            'text/x-sass': 'scss',
-            'text/x-scss': 'scss',
-            'text/x-toml': 'ini',
-            'text/x-nginx-conf': 'nginx',
-            'text/x-properties': 'ini',
-            'text/x-diff': 'diff',
-            'text/x-cassandra': 'sql',
-            'text/x-mariadb': 'mysql',
-            'text/x-mssql': 'sql',
-            'text/x-mysql': 'mysql',
-            'text/x-pgsql': 'pgsql',
-            'text/x-sqlite': 'sql',
-            'message/http': 'http',
+            'text/x-markdown': 'markdown',
+            'text/x-sh': 'shell',
+            'text/x-dockerfile': 'dockerfile',
+            'text/x-sql': 'sql',
             'script/x-vue': 'html'
         };
-        return languageMap[mimeType] || 'plaintext';
+        return map[mimeType] || 'plaintext';
     };
 
-    // Auto-detect and set language when editing existing files
+    // Detectar lenguaje al cargar
     useEffect(() => {
         if (action === 'edit' && hash) {
             const path = hashToPath(hash);
-            const detectedMime = detectLanguageFromPath(path);
-            setLang(detectedMime);
+            setLang(detectLanguageFromPath(path));
         }
     }, [action, hash]);
 
+    // Guardar archivo
     const save = (name?: string) => {
-        if (!editorRef.current) {
-            return;
-        }
+        if (!editorRef.current) return;
 
         setLoading(true);
         clearFlashes('files:view');
@@ -230,13 +150,9 @@ const Editor = () => {
 
         saveFileContents(uuid, filePath, editorContent)
             .then(() => {
-                // Update the content state to match what was saved
                 setContent(editorContent);
-
                 if (name) {
-                    // For new files, navigate to edit mode with the new file
                     history.push(`/server/${id}/files/edit#/${encodePathSegments(name)}`);
-                    // Update the directory context
                     setDirectory(dirname(name));
                 }
             })
@@ -244,10 +160,10 @@ const Editor = () => {
                 console.error('Error saving file:', error);
                 addError({ message: httpErrorToHuman(error), key: 'files:view' });
             })
-            .then(() => setLoading(false));
+            .finally(() => setLoading(false));
     };
 
-    // Load file contents for existing files
+    // Cargar contenido del archivo
     useEffect(() => {
         if (action === 'new') return;
 
@@ -258,111 +174,170 @@ const Editor = () => {
         getFileContents(uuid, path)
             .then(setContent)
             .catch((error) => {
-                console.error(error);
                 addError({ message: httpErrorToHuman(error), key: 'files:view' });
             })
-            .then(() => setLoading(false));
+            .finally(() => setLoading(false));
     }, [action, uuid, hash]);
 
-    // Load Monaco Editor from CDN
+    // Cargar editor (Monaco o CodeMirror)
     useEffect(() => {
-        const loadMonaco = () => {
-            // Check if Monaco is already loaded
-            if (window.monaco) {
-                setMonacoLoaded(true);
-                return;
-            }
+        if (editorLoaded || !containerRef.current) return;
 
+        if (isMobile) {
+            // === Cargar CodeMirror 6 ===
+            const loadCodeMirror = () => {
+                const [cmScript, cmStyle] = ['lib/codemirror.js', 'lib/codemirror.css'].map(file => {
+                    const el = document.createElement('link');
+                    el.rel = 'stylesheet';
+                    el.href = `https://cdn.jsdelivr.net/npm/codemirror@6.0.2/${file}`;
+                    return el;
+                });
+                document.head.appendChild(cmStyle);
+
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/codemirror@6.0.2/lib/codemirror.min.js';
+                script.onload = () => {
+                    // Cargar extensiones según el lenguaje
+                    const lang = getLanguageId(detectLanguageFromPath(hashToPath(hash)));
+                    const addons = {
+                        javascript: () => import('https://cdn.jsdelivr.net/npm/@codemirror/lang-javascript@6.1.1/dist/index.min.js'),
+                        html: () => import('https://cdn.jsdelivr.net/npm/@codemirror/lang-html@6.4.1/dist/index.min.js'),
+                        css: () => import('https://cdn.jsdelivr.net/npm/@codemirror/lang-css@6.0.1/dist/index.min.js'),
+                        json: () => import('https://cdn.jsdelivr.net/npm/@codemirror/lang-json@6.0.1/dist/index.min.js'),
+                        markdown: () => import('https://cdn.jsdelivr.net/npm/@codemirror/lang-markdown@6.1.1/dist/index.min.js'),
+                        python: () => import('https://cdn.jsdelivr.net/npm/@codemirror/lang-python@6.0.1/dist/index.min.js'),
+                        shell: () => import('https://cdn.jsdelivr.net/npm/@codemirror/lang-shell@6.0.1/dist/index.min.js'),
+                        sql: () => import('https://cdn.jsdelivr.net/npm/@codemirror/lang-sql@6.0.1/dist/index.min.js'),
+                    };
+
+                    const loadLanguage = async () => {
+                        let langSupport = null;
+                        const loader = addons[lang as keyof typeof addons];
+                        if (loader) {
+                            try {
+                                const mod = await loader();
+                                langSupport = mod.default ? mod.default() : mod();
+                            } catch (e) {
+                                console.warn(`Language ${lang} not supported in CodeMirror`);
+                            }
+                        }
+
+                        const cm = window.CodeMirror(containerRef.current!, {
+                            value: content || '',
+                            lineNumbers: true,
+                            theme: 'darcula',
+                            mode: lang,
+                            indentUnit: 4,
+                            tabSize: 4,
+                            indentWithTabs: false,
+                            autoCloseBrackets: true,
+                            matchBrackets: true,
+                            ...langSupport ? { extraKeys: { 'Ctrl-S': save, 'Cmd-S': save } } : {}
+                        });
+
+                        // Adaptador para simular API de Monaco
+                        const adapter = {
+                            getValue: () => cm.getValue(),
+                            setValue: (val: string) => cm.setValue(val),
+                            onDidChangeModelContent: (cb: () => void) => cm.on('change', cb),
+                            dispose: () => cm.toTextArea(),
+                            getModel: () => ({ getMode: () => lang })
+                        };
+
+                        editorRef.current = adapter;
+                        setEditorLoaded(true);
+                    };
+
+                    loadLanguage();
+                };
+                document.head.appendChild(script);
+            };
+
+            loadCodeMirror();
+        } else {
+            // === Cargar Monaco Editor ===
             const script = document.createElement('script');
             script.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js';
             script.onload = () => {
-                window.require.config({ 
-                    paths: { 
-                        vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' 
-                    } 
+                window.require.config({
+                    paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }
                 });
                 window.require(['vs/editor/editor.main'], () => {
-                    setMonacoLoaded(true);
+                    setEditorLoaded(true);
                 });
             };
             document.head.appendChild(script);
-        };
+        }
 
-        loadMonaco();
-
-        // Cleanup function
         return () => {
-            if (editorRef.current) {
+            if (editorRef.current && editorRef.current.dispose) {
                 editorRef.current.dispose();
             }
         };
-    }, []);
+    }, [isMobile, editorLoaded]);
 
-    // Initialize editor when both Monaco is loaded and we have content (or for new files)
+    // Inicializar editor cuando esté cargado
     useEffect(() => {
-        if (!monacoLoaded || !containerRef.current || editorRef.current) {
+        if (!editorLoaded || !containerRef.current || editorRef.current) return;
+
+        const initialContent = action === 'new' ? '' : content;
+        const languageId = getLanguageId(lang);
+
+        if (isMobile) {
+            // Ya se inicializó en el paso anterior
             return;
         }
 
-        // For new files, initialize immediately
-        // For edit files, wait until content is loaded (loading is false)
-        if (action === 'new' || (action === 'edit' && !loading)) {
-            const initialContent = action === 'new' && !content ? '' : content;
-            const editorLanguage = getMonacoLanguage(lang);
+        // Monaco para escritorio
+        editorRef.current = window.monaco.editor.create(containerRef.current, {
+            value: initialContent,
+            language: languageId,
+            theme: 'vs-dark',
+            automaticLayout: true,
+            minimap: { enabled: true },
+            fontSize: 14,
+            wordWrap: 'on',
+            scrollBeyondLastLine: false
+        });
 
-            // Create the editor
-            editorRef.current = window.monaco.editor.create(containerRef.current, {
-                value: initialContent,
-                language: editorLanguage,
-                theme: 'vs-dark',
-                automaticLayout: true,
-                minimap: {
-                    enabled: true
-                },
-                fontSize: 14,
-                wordWrap: 'on',
-                scrollBeyondLastLine: false,
-                lineNumbersMinChars: 3
-            });
-        }
-    }, [monacoLoaded, content, loading, action, lang]);
+        editorRef.current.onDidChangeModelContent(() => {
+            setContent(editorRef.current.getValue());
+        });
+    }, [editorLoaded, content, lang, action, isMobile]);
 
-    // Update editor language when lang changes
+    // Actualizar idioma
     useEffect(() => {
-        if (editorRef.current && window.monaco && monacoLoaded) {
+        if (!editorRef.current || !editorLoaded) return;
+
+        const languageId = getLanguageId(lang);
+        if (isMobile) {
+            // CodeMirror no cambia de modo fácilmente, recargar
+            save();
+            window.location.reload();
+        } else if (window.monaco) {
             const model = editorRef.current.getModel();
-            if (model) {
-                const monacoLanguage = getMonacoLanguage(lang);
-                window.monaco.editor.setModelLanguage(model, monacoLanguage);
-            }
+            window.monaco.editor.setModelLanguage(model, languageId);
         }
-    }, [lang, monacoLoaded]);
+    }, [lang, editorLoaded, isMobile]);
 
-    // Add keyboard shortcut for Ctrl+S (Windows/Linux) and Cmd+S (macOS)
+    // Atajos de teclado
     useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
-                event.preventDefault();
-                if (action === 'edit') {
-                    save();
-                } else if (action === 'new') {
-                    setModalVisible(true);
-                }
+        const handler = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                action === 'edit' ? save() : setModalVisible(true);
             }
         };
-
-        document.addEventListener('keydown', handleKeyDown);
-        return () => {
-            document.removeEventListener('keydown', handleKeyDown);
-        };
+        document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
     }, [action, save]);
 
-    // Update editor content when content state changes
+    // Sincronizar contenido
     useEffect(() => {
-        if (editorRef.current && monacoLoaded && content !== editorRef.current.getValue()) {
+        if (editorRef.current && content !== editorRef.current.getValue()) {
             editorRef.current.setValue(content);
         }
-    }, [content, monacoLoaded]);
+    }, [content]);
 
     return (
         <>
@@ -371,31 +346,28 @@ const Editor = () => {
                 onDismissed={() => setModalVisible(false)}
                 onFileNamed={(name) => {
                     setModalVisible(false);
-                    // Auto-detect language based on the new file name
-                    const detectedMime = detectLanguageFromPath(name);
-                    setLang(detectedMime);
+                    setLang(detectLanguageFromPath(name));
                     save(name);
                 }}
             />
 
-            <div style={{ position: 'relative', height: '60vh', minHeight: '300px' }}>
+            <div style={{ position: 'relative', height: '60vh', minHeight: '300px', marginTop: '0.5rem' }}>
                 <SpinnerOverlay visible={loading} />
-                <div 
-                    ref={containerRef} 
-                    id="monaco-container" 
-                    style={{ 
-                        borderRadius: 'var(--borderRadius)', 
-                        overflow: 'hidden',
+                <div
+                    ref={containerRef}
+                    style={{
                         height: '100%',
-                        width: '100%'
-                    }} 
+                        borderRadius: 'var(--borderRadius)',
+                        overflow: 'hidden',
+                        border: '1px solid #333'
+                    }}
                 />
             </div>
 
-            <div className="responsive-button-group" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', gap: '0.5rem' }}>
-                <div className='FileEditContainer___StyledDiv5-sc-48rzpu-9 arKOj responsive-button'>
-                    <Select value={lang} onChange={(e) => setLang(e.currentTarget.value)}>
-                        {modes.map((mode) => (
+            <div className="responsive-button-group">
+                <div className="responsive-button">
+                    <Select value={lang} onChange={e => setLang(e.target.value)}>
+                        {modes.map(mode => (
                             <option key={`${mode.name}_${mode.mime}`} value={mode.mime}>
                                 {mode.name}
                             </option>
@@ -404,13 +376,13 @@ const Editor = () => {
                 </div>
 
                 {action === 'edit' ? (
-                    <Can action={'file.update'}>
-                        <Button className="responsive-button" onClick={() => save()}>
+                    <Can action="file.update">
+                        <Button className="responsive-button" onClick={save}>
                             Save Content
                         </Button>
                     </Can>
                 ) : (
-                    <Can action={'file.create'}>
+                    <Can action="file.create">
                         <Button className="responsive-button" onClick={() => setModalVisible(true)}>
                             Create File
                         </Button>
@@ -420,4 +392,5 @@ const Editor = () => {
         </>
     );
 };
+
 export default Editor;
