@@ -4,8 +4,8 @@ info:
   description: "Replaces the regular pterodactyl file editor with Monaco"
   version: "1.2"
   target: "beta-2024-12"
-  author: "FlyxNodes"
-  website: "https://flyxnodes.xyz/"
+  author: "Zephrynis"
+  website: "https://zephrynis.me/"
 
 admin:
   view: "view.blade.php"
